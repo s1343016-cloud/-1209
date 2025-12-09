@@ -26,8 +26,23 @@ if uploaded_file is None:
     st.info("尚未上傳檔案，請先上傳 CSV 才會顯示地圖。")
     st.stop()
 
-# 2. 讀取原始資料（保留中文欄位給使用者看）
-df_raw = pd.read_csv(uploaded_file)
+# 2. 讀取原始資料（保留中文欄位給使用者看），處理多種常見編碼
+decode_success = False
+encodings_to_try = ["utf-8", "utf-8-sig", "big5", "cp950"]
+
+for enc in encodings_to_try:
+    try:
+        uploaded_file.seek(0)  # 每次嘗試前重設檔案指標
+        df_raw = pd.read_csv(uploaded_file, encoding=enc)
+        decode_success = True
+        st.info(f"CSV 以編碼 {enc} 成功讀取")
+        break
+    except UnicodeDecodeError:
+        continue
+
+if not decode_success:
+    st.error("CSV 檔案解碼失敗，請嘗試將檔案另存為 UTF-8 或 Big5 再上傳。")
+    st.stop()
 
 required_cols = {"車站", "緯度", "經度", "日平均", "年總量"}
 if not required_cols.issubset(df_raw.columns):
@@ -45,6 +60,17 @@ df = df_raw.rename(columns={
     "日平均": "daily_avg",
     "年總量": "year_total",
 })
+
+# 確保數值欄位為數字型態
+for col in ["lat", "lon", "daily_avg", "year_total"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+# 移除關鍵欄位為 NaN 的列
+df = df.dropna(subset=["lat", "lon", "daily_avg", "year_total"])
+
+if df.empty:
+    st.error("所有列的數值欄位皆無法轉成數字，請檢查 CSV 資料內容。")
+    st.stop()
 
 # 4. 視覺化參數：選擇高度用日平均或年總量
 st.subheader("3️⃣ 視覺化參數設定")
@@ -72,7 +98,7 @@ elevation_scale = st.slider(
 layer_column = pdk.Layer(
     "ColumnLayer",
     data=df,
-    get_position="[lon, lat]",          # 內部已改成 lon, lat
+    get_position="[lon, lat]",          # 使用 lon, lat 當位置
     get_elevation=elevation_column,     # 根據選擇使用日平均或年總量
     elevation_scale=elevation_scale,
     radius=150,                         # 每個柱子的底面半徑 (公尺)
@@ -81,7 +107,7 @@ layer_column = pdk.Layer(
     get_fill_color="[255, 140, 0, 200]",  # 橘色半透明
 )
 
-# 6. 設定視角（以台北車站附近為中心）
+# 6. 設定視角（以台北車站附近為中心，可視需要調整）
 view_state = pdk.ViewState(
     latitude=25.0478,
     longitude=121.5170,
