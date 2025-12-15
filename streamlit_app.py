@@ -62,4 +62,113 @@ if not decode_success:
     st.error("CSV 檔案解碼失敗，請嘗試將檔案另存為 UTF-8 或 Big5 再上傳。")
     st.stop()
 
-required_cols = {"系統", "線名", "車站", "_
+required_cols = {"系統", "線名", "車站", "緯度", "經度", "日平均", "年總量"}
+if not required_cols.issubset(df_raw.columns):
+    st.error(f"CSV 檔必須包含欄位：{required_cols}，目前欄位為：{set(df_raw.columns)}")
+    st.stop()
+
+st.subheader("2️⃣ 原始資料預覽（中文欄位）")
+st.dataframe(df_raw)
+
+# 3. 轉成內部英文欄位名稱
+df = df_raw.rename(columns={
+    "系統": "system",
+    "線名": "line",
+    "車站": "station",
+    "緯度": "lat",
+    "經度": "lon",
+    "日平均": "daily_avg",
+    "年總量": "year_total",
+})
+
+# 數值欄位轉 float
+for col in ["lat", "lon", "daily_avg", "year_total"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+df = df.dropna(subset=["lat", "lon", "daily_avg", "year_total"])
+if df.empty:
+    st.error("所有列的數值欄位皆無法轉成數字，請檢查 CSV 資料內容。")
+    st.stop()
+
+# 線名 -> 顏色
+def map_line_color(line_name: str):
+    if pd.isna(line_name):
+        return DEFAULT_COLOR
+    return LINE_COLOR_MAP.get(str(line_name), DEFAULT_COLOR)
+
+df["color"] = df["line"].apply(map_line_color)
+
+# 4. 互動式選擇線路
+st.subheader("3️⃣ 選擇要顯示的線路")
+
+all_lines = sorted(df["line"].dropna().unique())
+selected_lines = st.multiselect(
+    "選擇線路（可多選）",
+    options=all_lines,
+    default=all_lines,
+)
+
+if not selected_lines:
+    st.warning("尚未選擇任何線路，請至少選一條線。")
+    st.stop()
+
+df_view = df[df["line"].isin(selected_lines)]
+
+# 5. 選擇高度使用日平均 / 年總量
+metric_option = st.selectbox(
+    "柱子高度使用的數字",
+    ("日平均", "年總量"),
+)
+elevation_column = "daily_avg" if metric_option == "日平均" else "year_total"
+
+elevation_scale = st.slider(
+    "柱子高度倍率 (elevation_scale)",
+    min_value=0.0001,
+    max_value=0.5,
+    value=0.01,
+    step=0.0001,
+)
+
+# 6. 建立 ColumnLayer（每一站一根柱子，顏色依線名）
+station_layer = pdk.Layer(
+    "ColumnLayer",
+    data=df_view,
+    get_position="[lon, lat]",
+    get_elevation=elevation_column,
+    elevation_scale=elevation_scale,
+    radius=150,
+    pickable=True,
+    extruded=True,
+    get_fill_color="color",  # 使用每列的 color 欄位 (RGBA)
+)
+
+# 7. 視角：以目前篩選後站點的平均位置為中心
+center_lat = df_view["lat"].mean()
+center_lon = df_view["lon"].mean()
+
+view_state = pdk.ViewState(
+    latitude=center_lat,
+    longitude=center_lon,
+    zoom=9,
+    pitch=50,
+    bearing=0,
+)
+
+# 8. 顯示地圖
+r = pdk.Deck(
+    layers=[station_layer],
+    initial_view_state=view_state,
+    map_style="mapbox://styles/mapbox/light-v10",
+    tooltip={
+        "text": (
+            "系統：{system}\n"
+            "線名：{line}\n"
+            "車站：{station}\n"
+            "日平均：{daily_avg}\n"
+            "年總量：{year_total}"
+        )
+    },
+)
+
+st.subheader("4️⃣ 可選線路的 3D 車站人流地圖")
+st.pydeck_chart(r)
