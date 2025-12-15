@@ -132,12 +132,38 @@ station_layer = pdk.Layer(
 center_lat = df_view["lat"].mean()
 center_lon = df_view["lon"].mean()
 
+st.subheader("4️⃣ 觀察視角設定")
+
+zoom = st.slider(
+    "縮放（zoom）",
+    min_value=6.0,
+    max_value=16.0,
+    value=9.0,
+    step=0.1,
+)
+
+pitch = st.slider(
+    "俯視角度（pitch）",
+    min_value=0,
+    max_value=85,
+    value=50,
+    step=1,
+)
+
+bearing = st.slider(
+    "旋轉角度（bearing）",
+    min_value=-180,
+    max_value=180,
+    value=0,
+    step=1,
+)
+
 view_state = pdk.ViewState(
     latitude=center_lat,
     longitude=center_lon,
-    zoom=9,
-    pitch=60,
-    bearing=0,
+    zoom=zoom,
+    pitch=pitch,
+    bearing=bearing,
 )
 
 # 7. 顯示地圖
@@ -154,6 +180,7 @@ r = pdk.Deck(
             "年總量：{year_total}"
         )
     },
+    controller=True,  # 允許滑鼠拖曳旋轉 / 縮放 / 平移
 )
 
 st.subheader("4️⃣ 全台捷運・輕軌 3D 車站人流地圖")
