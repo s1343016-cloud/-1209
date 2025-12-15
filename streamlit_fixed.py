@@ -8,7 +8,7 @@ import os
 #   讀取 data/mrt_ridership.csv
 #   CSV 欄位：系統, 線名, 車站, 緯度, 經度, 日平均, 年總量
 # ===============================================
-st.title("🚇 全台捷運・輕軌 3D 車站人流地圖（固定資料）")
+st.title("🚇 全台捷運・輕軌 3D 車站人流地圖")
 
 # 0. 檢查 Mapbox 金鑰
 if "MAPBOX_API_KEY" not in st.secrets:
