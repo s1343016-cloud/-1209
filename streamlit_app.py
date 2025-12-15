@@ -3,10 +3,10 @@ import pandas as pd
 import pydeck as pdk
 
 # ===============================================
-#   台北捷運站：人流 3D 視覺化 (上傳 CSV 版)
-#   CSV 欄位：車站, 緯度, 經度, 日平均, 年總量
+#   全台捷運 / 輕軌＋車站人流 3D 視覺化
+#   CSV 欄位：系統, 線名, 車站, 緯度, 經度, 日平均, 年總量
 # ===============================================
-st.title("🚇 台北捷運站人流 3D 地圖（上傳 CSV）")
+st.title("🚇 全台捷運・輕軌 3D 車站人流地圖（可選線路）")
 
 # 0. 檢查 Mapbox 金鑰
 if "MAPBOX_API_KEY" not in st.secrets:
@@ -15,24 +15,42 @@ if "MAPBOX_API_KEY" not in st.secrets:
 
 pdk.settings.mapbox_api_key = st.secrets["MAPBOX_API_KEY"]
 
+# 顏色設定：依你給的 13 條線
+LINE_COLOR_MAP = {
+    "台北紅線":   [227, 0, 46, 200],    # 紅
+    "台中捷運":   [0, 160, 80, 200],    # 綠
+    "高雄輕軌":   [0, 166, 81, 200],    # 綠
+    "台北綠線":   [0, 148, 96, 200],    # 綠
+    "北捷環狀線": [255, 222, 0, 200],  # 黃
+    "台北安坑輕軌": [0, 180, 120, 200],# 淺綠
+    "台北文湖線": [155, 118, 83, 200], # 棕
+    "台北板南線": [0, 112, 189, 200],  # 藍
+    "淡海輕軌":   [0, 170, 170, 200],  # 藍綠
+    "高捷紅線":   [226, 0, 26, 200],   # 紅
+    "高捷橘線":   [247, 148, 29, 200], # 橘
+    "北捷o線":   [255, 210, 60, 200],  # 黃橘
+    "桃園機捷":   [140, 80, 180, 200], # 紫
+}
+DEFAULT_COLOR = [120, 120, 120, 200]
+
 # 1. 上傳 CSV 檔
-st.subheader("1️⃣ 上傳捷運站人流資料（CSV）")
+st.subheader("1️⃣ 上傳車站人流資料（CSV）")
 uploaded_file = st.file_uploader(
-    "請上傳包含 車站, 緯度, 經度, 日平均, 年總量 欄位的 CSV 檔",
-    type=["csv"]
+    "請上傳包含 系統, 線名, 車站, 緯度, 經度, 日平均, 年總量 欄位的 CSV 檔",
+    type=["csv"],
 )
 
 if uploaded_file is None:
     st.info("尚未上傳檔案，請先上傳 CSV 才會顯示地圖。")
     st.stop()
 
-# 2. 讀取原始資料（保留中文欄位給使用者看），處理多種常見編碼
+# 2. 讀取 CSV（處理常見編碼）
 decode_success = False
 encodings_to_try = ["utf-8", "utf-8-sig", "big5", "cp950"]
 
 for enc in encodings_to_try:
     try:
-        uploaded_file.seek(0)  # 每次嘗試前重設檔案指標
+        uploaded_file.seek(0)
         df_raw = pd.read_csv(uploaded_file, encoding=enc)
         decode_success = True
         st.info(f"CSV 以編碼 {enc} 成功讀取")
@@ -44,7 +62,7 @@ if not decode_success:
     st.error("CSV 檔案解碼失敗，請嘗試將檔案另存為 UTF-8 或 Big5 再上傳。")
     st.stop()
 
-required_cols = {"車站", "緯度", "經度", "日平均", "年總量"}
+required_cols = {"系統", "線名", "車站", "緯度", "經度", "日平均", "年總量"}
 if not required_cols.issubset(df_raw.columns):
     st.error(f"CSV 檔必須包含欄位：{required_cols}，目前欄位為：{set(df_raw.columns)}")
     st.stop()
@@ -52,8 +70,10 @@ if not required_cols.issubset(df_raw.columns):
 st.subheader("2️⃣ 原始資料預覽（中文欄位）")
 st.dataframe(df_raw)
 
-# 3. 轉成內部英文欄位名稱給 pydeck 使用
+# 3. 轉成內部英文欄位名稱
 df = df_raw.rename(columns={
+    "系統": "system",
+    "線名": "line",
     "車站": "station",
     "緯度": "lat",
     "經度": "lon",
@@ -61,74 +81,42 @@ df = df_raw.rename(columns={
     "年總量": "year_total",
 })
 
-# 確保數值欄位為數字型態
+# 數值欄位轉 float
 for col in ["lat", "lon", "daily_avg", "year_total"]:
     df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# 移除關鍵欄位為 NaN 的列
 df = df.dropna(subset=["lat", "lon", "daily_avg", "year_total"])
-
 if df.empty:
     st.error("所有列的數值欄位皆無法轉成數字，請檢查 CSV 資料內容。")
     st.stop()
 
-# 4. 視覺化參數：選擇高度用日平均或年總量
-st.subheader("3️⃣ 視覺化參數設定")
+# 線名 -> 顏色
+def map_line_color(line_name: str):
+    if pd.isna(line_name):
+        return DEFAULT_COLOR
+    return LINE_COLOR_MAP.get(str(line_name), DEFAULT_COLOR)
 
+df["color"] = df["line"].apply(map_line_color)
+
+# 4. 互動式選擇線路
+st.subheader("3️⃣ 選擇要顯示的線路")
+
+all_lines = sorted(df["line"].dropna().unique())
+selected_lines = st.multiselect(
+    "選擇線路（可多選）",
+    options=all_lines,
+    default=all_lines,
+)
+
+if not selected_lines:
+    st.warning("尚未選擇任何線路，請至少選一條線。")
+    st.stop()
+
+df_view = df[df["line"].isin(selected_lines)]
+
+# 5. 選擇高度使用日平均 / 年總量
 metric_option = st.selectbox(
-    "選擇要用哪個數字當柱子高度",
-    ("日平均", "年總量")
+    "柱子高度使用的數字",
+    ("日平均", "年總量"),
 )
-
-if metric_option == "日平均":
-    elevation_column = "daily_avg"
-else:
-    elevation_column = "year_total"
-
-elevation_scale = st.slider(
-    "柱子高度倍率 (elevation_scale)",
-    min_value=0.0001,
-    max_value=0.5,
-    value=0.01,
-    step=0.0001,
-    help="如果柱子太高或太矮，可以調整這個倍率。"
-)
-
-# 5. 建立 ColumnLayer（每一站一根 3D 柱子）
-layer_column = pdk.Layer(
-    "ColumnLayer",
-    data=df,
-    get_position="[lon, lat]",          # 使用 lon, lat 當位置
-    get_elevation=elevation_column,     # 根據選擇使用日平均或年總量
-    elevation_scale=elevation_scale,
-    radius=150,                         # 每個柱子的底面半徑 (公尺)
-    pickable=True,
-    extruded=True,
-    get_fill_color="[255, 140, 0, 200]",  # 橘色半透明
-)
-
-# 6. 設定視角（以台北車站附近為中心，可視需要調整）
-view_state = pdk.ViewState(
-    latitude=25.0478,
-    longitude=121.5170,
-    zoom=11,
-    pitch=50,
-    bearing=0,
-)
-
-# 7. 顯示地圖
-r = pdk.Deck(
-    layers=[layer_column],
-    initial_view_state=view_state,
-    map_style="mapbox://styles/mapbox/light-v10",
-    tooltip={
-        "text": (
-            "車站：{station}\n"
-            "日平均：{daily_avg}\n"
-            "年總量：{year_total}"
-        )
-    },
-)
-
-st.subheader("4️⃣ 3D 人流地圖")
-st.pydeck_chart(r)
+elevation_col_
