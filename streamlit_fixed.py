@@ -42,8 +42,7 @@ if not os.path.exists(csv_path):
     st.error(f"找不到資料檔：{csv_path}，請確認檔案存在且路徑正確。")
     st.stop()
 
-# 若你確定檔案是 UTF-8，可以只用 encoding="utf-8-sig"
-# 不確定時也可以改成和前面一樣寫一個多編碼嘗試的迴圈
+# 檔案建議存成 UTF-8 或 UTF-8-SIG
 df_raw = pd.read_csv(csv_path, encoding="utf-8-sig")
 
 required_cols = {"系統", "線名", "車站", "緯度", "經度", "日平均", "年總量"}
@@ -82,7 +81,7 @@ def map_line_color(line_name: str):
 
 df["color"] = df["line"].apply(map_line_color)
 
-# 3. 互動式選擇線路（資料已經固定，不用上傳）
+# 3. 互動式選擇線路
 st.subheader("2️⃣ 選擇要顯示的線路")
 
 all_lines = sorted(df["line"].dropna().unique())
@@ -98,7 +97,7 @@ if not selected_lines:
 
 df_view = df[df["line"].isin(selected_lines)]
 
-# 4. 選擇高度使用日平均 / 年總量
+# 4. 視覺化設定（高度使用日平均 / 年總量）
 st.subheader("3️⃣ 視覺化設定")
 
 metric_option = st.selectbox(
@@ -115,24 +114,11 @@ elevation_scale = st.slider(
     step=0.0001,
 )
 
-# 5. 建立 ColumnLayer（每一站一根柱子，顏色依線名）
-station_layer = pdk.Layer(
-    "ColumnLayer",
-    data=df_view,
-    get_position="[lon, lat]",
-    get_elevation=elevation_column,
-    elevation_scale=elevation_scale,
-    radius=150,
-    pickable=True,
-    extruded=True,
-    get_fill_color="color",
-)
+# 5. 觀察視角設定（可旋轉 / 拉近拉遠）
+st.subheader("4️⃣ 觀察視角設定")
 
-# 6. 視角：以目前篩選後站點的平均位置為中心
 center_lat = df_view["lat"].mean()
 center_lon = df_view["lon"].mean()
-
-st.subheader("4️⃣ 觀察視角設定")
 
 zoom = st.slider(
     "縮放（zoom）",
@@ -166,7 +152,20 @@ view_state = pdk.ViewState(
     bearing=bearing,
 )
 
-# 7. 顯示地圖
+# 6. 建立 ColumnLayer（每一站一根柱子，顏色依線名）
+station_layer = pdk.Layer(
+    "ColumnLayer",
+    data=df_view,
+    get_position="[lon, lat]",
+    get_elevation=elevation_column,
+    elevation_scale=elevation_scale,
+    radius=150,
+    pickable=True,
+    extruded=True,
+    get_fill_color="color",
+)
+
+# 7. 顯示地圖（不再加 controller 參數，避免 TypeError）
 r = pdk.Deck(
     layers=[station_layer],
     initial_view_state=view_state,
@@ -180,9 +179,7 @@ r = pdk.Deck(
             "年總量：{year_total}"
         )
     },
-    controller=True,  # 允許滑鼠拖曳旋轉 / 縮放 / 平移
 )
 
-st.subheader("4️⃣ 全台捷運・輕軌 3D 車站人流地圖")
+st.subheader("5️⃣ 全台捷運・輕軌 3D 車站人流地圖")
 st.pydeck_chart(r)
-
