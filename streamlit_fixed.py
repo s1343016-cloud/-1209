@@ -136,7 +136,7 @@ view_state = pdk.ViewState(
     latitude=center_lat,
     longitude=center_lon,
     zoom=9,
-    pitch=40,
+    pitch=60,
     bearing=0,
 )
 
