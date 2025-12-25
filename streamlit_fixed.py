@@ -182,12 +182,9 @@ r = pdk.Deck(
 st.subheader("5️⃣ 全台捷運・輕軌 3D 車站人流地圖")
 st.pydeck_chart(r)
 
-# 8. 比較用圖表（依目前選到的線路）
 st.subheader("6️⃣ 線路間人流比較圖")
 
-# 依選擇的指標決定要算什麼
 if metric_option == "日平均":
-    # 每條線的「平均日平均」
     metric_col = "avg_daily"
     metric_title = "各線平均日進站量"
     df_line = (
@@ -198,7 +195,6 @@ if metric_option == "日平均":
         .set_index("line")
     )
 else:
-    # 每條線的「年總量總和」
     metric_col = "sum_year"
     metric_title = "各線年進站總量"
     df_line = (
@@ -210,4 +206,28 @@ else:
     )
 
 st.write(metric_title)
-st.bar_chart(df_line)
+
+df_plot = df_line.reset_index()   # 有 'line' 和 指標欄位
+
+chart = (
+    alt.Chart(df_plot)
+    .mark_bar()
+    .encode(
+        x=alt.X(
+            "line:N",
+            sort=None,
+            axis=alt.Axis(
+                title="線路",
+                labelAngle=-90,      # 文字直立
+            ),
+        ),
+        y=alt.Y(
+            f"{df_plot.columns[1]}:Q",
+            title=metric_title,
+        ),
+        tooltip=["line", df_plot.columns[1]],
+    )
+    .properties(height=400)
+)
+
+st.altair_chart(chart, use_container_width=True)
