@@ -17,32 +17,30 @@ if "MAPBOX_API_KEY" not in st.secrets:
 
 pdk.settings.mapbox_api_key = st.secrets["MAPBOX_API_KEY"]
 
-# 顏色設定：依你給的 13 條線
+# 顏色設定
 LINE_COLOR_MAP = {
-    "台北紅線":     [227, 0, 46, 200],    # 紅
-    "台中捷運":     [0, 160, 80, 200],    # 綠
-    "高雄輕軌":     [0, 166, 81, 200],    # 綠
-    "台北綠線":     [0, 148, 96, 200],    # 綠
-    "北捷環狀線":   [255, 222, 0, 200],  # 黃
-    "台北安坑輕軌": [0, 180, 120, 200],  # 淺綠
-    "台北文湖線":   [155, 118, 83, 200], # 棕
-    "台北板南線":   [0, 112, 189, 200],  # 藍（注意：如果你的 CSV 寫「板南線」，顏色會變成預設灰色，但仍會顯示）
-    "淡海輕軌":     [0, 170, 170, 200],  # 藍綠
-    "高捷紅線":     [226, 0, 26, 200],   # 紅
-    "高捷橘線":     [247, 148, 29, 200], # 橘
-    "北捷o線":      [255, 210, 60, 200], # 黃橘
-    "桃園機捷":     [140, 80, 180, 200],# 紫
+    "台北紅線":     [227, 0, 46, 200],
+    "台中捷運":     [0, 160, 80, 200],
+    "高雄輕軌":     [0, 166, 81, 200],
+    "台北綠線":     [0, 148, 96, 200],
+    "北捷環狀線":   [255, 222, 0, 200],
+    "台北安坑輕軌": [0, 180, 120, 200],
+    "台北文湖線":   [155, 118, 83, 200],
+    "台北板南線":   [0, 112, 189, 200],
+    "淡海輕軌":     [0, 170, 170, 200],
+    "高捷紅線":     [226, 0, 26, 200],
+    "高捷橘線":     [247, 148, 29, 200],
+    "北捷o線":      [255, 210, 60, 200],
+    "桃園機捷":     [140, 80, 180, 200],
 }
 DEFAULT_COLOR = [120, 120, 120, 200]
 
 # 1. 讀取固定 CSV 檔
 csv_path = os.path.join("data", "mrt_ridership.csv")
-
 if not os.path.exists(csv_path):
     st.error(f"找不到資料檔：{csv_path}，請確認檔案存在且路徑正確。")
     st.stop()
 
-# 檔案建議存成 UTF-8 或 UTF-8-SIG
 df_raw = pd.read_csv(csv_path, encoding="utf-8-sig")
 
 required_cols = {"系統", "線名", "車站", "緯度", "經度", "日平均", "年總量"}
@@ -70,7 +68,7 @@ df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
 df["daily_avg"] = pd.to_numeric(df["daily_avg"], errors="coerce")
 df["year_total"] = pd.to_numeric(df["year_total"], errors="coerce")
 
-# 緯度、經度一定要有；流量沒有就設 0
+# 緯度、經度必須有；流量沒有就設 0
 df = df.dropna(subset=["lat", "lon"])
 df["daily_avg"] = df["daily_avg"].fillna(0)
 df["year_total"] = df["year_total"].fillna(0)
@@ -87,9 +85,14 @@ def map_line_color(line_name: str):
 
 df["color"] = df["line"].apply(map_line_color)
 
-# 額外：顯示各線站數統計，方便檢查哪一條線被清掉了
+# 2a. 顯示各線站數統計＋板南線檢查
 st.subheader("2️⃣ 各線站數統計（清洗 lat/lon 後）")
 st.write(df.groupby("line").size())
+
+bannan_df = df[df["line"].str.contains("板南", na=False)]
+st.subheader("2️⃣-1 板南線檢查")
+st.write("板南相關站數：", len(bannan_df))
+st.dataframe(bannan_df.head(20))
 
 # 3. 互動式選擇線路
 st.subheader("3️⃣ 選擇要顯示的線路")
@@ -107,7 +110,7 @@ if not selected_lines:
 
 df_view = df[df["line"].isin(selected_lines)]
 
-# 4. 視覺化設定（高度使用日平均 / 年總量）
+# 4. 視覺化設定
 st.subheader("4️⃣ 視覺化設定")
 
 metric_option = st.selectbox(
@@ -124,13 +127,13 @@ elevation_scale = st.slider(
     step=0.0001,
 )
 
-# 5. 觀察視角設定（固定 zoom，可用滑鼠滾輪調整）
+# 5. 觀察視角設定
 st.subheader("5️⃣ 觀察視角設定")
 
 center_lat = df_view["lat"].mean()
 center_lon = df_view["lon"].mean()
 
-zoom = 9.0
+zoom = 9.0  # 固定 zoom，滑鼠仍可縮放
 
 pitch = st.slider(
     "俯視角度（pitch）",
@@ -156,7 +159,7 @@ view_state = pdk.ViewState(
     bearing=bearing,
 )
 
-# 6. 建立 ColumnLayer（每一站一根柱子，顏色依線名）
+# 6. 建立 ColumnLayer
 station_layer = pdk.Layer(
     "ColumnLayer",
     data=df_view,
