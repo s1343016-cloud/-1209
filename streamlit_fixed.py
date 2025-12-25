@@ -8,7 +8,7 @@ import os
 #   讀取 data/mrt_ridership.csv
 #   CSV 欄位：系統, 線名, 車站, 緯度, 經度, 日平均, 年總量
 # ===============================================
-st.title("🚇 全台捷運・輕軌 視覺化車站人流地圖")
+st.title("🚇 全台捷運・輕軌 3D 車站人流地圖（固定資料）")
 
 # 0. 檢查 Mapbox 金鑰
 if "MAPBOX_API_KEY" not in st.secrets:
@@ -26,7 +26,7 @@ LINE_COLOR_MAP = {
     "北捷環狀線":   [255, 222, 0, 200],  # 黃
     "台北安坑輕軌": [0, 180, 120, 200],  # 淺綠
     "台北文湖線":   [155, 118, 83, 200], # 棕
-    "台北板南線":   [0, 112, 189, 200],  # 藍
+    "台北板南線":   [0, 112, 189, 200],  # 藍（注意：如果你的 CSV 寫「板南線」，顏色會變成預設灰色，但仍會顯示）
     "淡海輕軌":     [0, 170, 170, 200],  # 藍綠
     "高捷紅線":     [226, 0, 26, 200],   # 紅
     "高捷橘線":     [247, 148, 29, 200], # 橘
@@ -65,12 +65,18 @@ df = df_raw.rename(columns={
 })
 
 # 數值欄位轉 float
-for col in ["lat", "lon", "daily_avg", "year_total"]:
-    df[col] = pd.to_numeric(df[col], errors="coerce")
+df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
+df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
+df["daily_avg"] = pd.to_numeric(df["daily_avg"], errors="coerce")
+df["year_total"] = pd.to_numeric(df["year_total"], errors="coerce")
 
-df = df.dropna(subset=["lat", "lon", "daily_avg", "year_total"])
+# 緯度、經度一定要有；流量沒有就設 0
+df = df.dropna(subset=["lat", "lon"])
+df["daily_avg"] = df["daily_avg"].fillna(0)
+df["year_total"] = df["year_total"].fillna(0)
+
 if df.empty:
-    st.error("所有列的數值欄位皆無法轉成數字，請檢查 CSV 資料內容。")
+    st.error("所有列的緯度 / 經度都是空的或無法轉成數字，請檢查 CSV 資料內容。")
     st.stop()
 
 # 線名 -> 顏色
@@ -81,8 +87,12 @@ def map_line_color(line_name: str):
 
 df["color"] = df["line"].apply(map_line_color)
 
+# 額外：顯示各線站數統計，方便檢查哪一條線被清掉了
+st.subheader("2️⃣ 各線站數統計（清洗 lat/lon 後）")
+st.write(df.groupby("line").size())
+
 # 3. 互動式選擇線路
-st.subheader("2️⃣ 選擇要顯示的線路")
+st.subheader("3️⃣ 選擇要顯示的線路")
 
 all_lines = sorted(df["line"].dropna().unique())
 selected_lines = st.multiselect(
@@ -98,7 +108,7 @@ if not selected_lines:
 df_view = df[df["line"].isin(selected_lines)]
 
 # 4. 視覺化設定（高度使用日平均 / 年總量）
-st.subheader("3️⃣ 視覺化設定")
+st.subheader("4️⃣ 視覺化設定")
 
 metric_option = st.selectbox(
     "柱子高度使用的數字",
@@ -114,13 +124,12 @@ elevation_scale = st.slider(
     step=0.0001,
 )
 
-# 5. 觀察視角設定（移除 zoom slider，固定一個預設 zoom）
-st.subheader("4️⃣ 觀察視角設定")
+# 5. 觀察視角設定（固定 zoom，可用滑鼠滾輪調整）
+st.subheader("5️⃣ 觀察視角設定")
 
 center_lat = df_view["lat"].mean()
 center_lon = df_view["lon"].mean()
 
-# 固定縮放程度，仍可用滑鼠滾輪自行放大縮小
 zoom = 9.0
 
 pitch = st.slider(
@@ -176,5 +185,5 @@ r = pdk.Deck(
     },
 )
 
-st.subheader("5️⃣ 全台捷運・輕軌 3D 車站人流地圖")
+st.subheader("6️⃣ 全台捷運・輕軌 3D 車站人流地圖")
 st.pydeck_chart(r)
