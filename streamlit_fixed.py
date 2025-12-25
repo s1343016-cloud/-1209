@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import pydeck as pdk
+import altair as alt   # 新增 Altair
 import os
 
 # ===============================================
@@ -182,6 +183,7 @@ r = pdk.Deck(
 st.subheader("5️⃣ 全台捷運・輕軌 3D 車站人流地圖")
 st.pydeck_chart(r)
 
+# 8. 線路間人流比較圖（Altair，線名直向排列在 Y 軸）
 st.subheader("6️⃣ 線路間人流比較圖")
 
 if metric_option == "日平均":
@@ -192,7 +194,6 @@ if metric_option == "日平均":
         .mean()
         .rename(metric_col)
         .reset_index()
-        .set_index("line")
     )
 else:
     metric_col = "sum_year"
@@ -202,30 +203,25 @@ else:
         .sum()
         .rename(metric_col)
         .reset_index()
-        .set_index("line")
     )
 
 st.write(metric_title)
 
-df_plot = df_line.reset_index()   # 有 'line' 和 指標欄位
-
+# 線名放在 Y 軸，數值在 X 軸 → 每條線一列，線名自然直直往下排
 chart = (
-    alt.Chart(df_plot)
+    alt.Chart(df_line)
     .mark_bar()
     .encode(
-        x=alt.X(
+        y=alt.Y(
             "line:N",
             sort=None,
-            axis=alt.Axis(
-                title="線路",
-                labelAngle=-90,      # 文字直立
-            ),
+            axis=alt.Axis(title="線路")
         ),
-        y=alt.Y(
-            f"{df_plot.columns[1]}:Q",
-            title=metric_title,
+        x=alt.X(
+            f"{metric_col}:Q",
+            title=metric_title
         ),
-        tooltip=["line", df_plot.columns[1]],
+        tooltip=["line", metric_col],
     )
     .properties(height=400)
 )
