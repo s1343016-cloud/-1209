@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import pydeck as pdk
-import altair as alt   # 新增 Altair
+import altair as alt
 import os
 
 # ===============================================
@@ -183,9 +183,9 @@ r = pdk.Deck(
 st.subheader("5️⃣ 全台捷運・輕軌 3D 車站人流地圖")
 st.pydeck_chart(r)
 
+# 8. 線路間人流比較圖（Altair，線名直立在 X 軸）
 st.subheader("6️⃣ 線路間人流比較圖")
 
-# 依選擇的指標決定要算什麼
 if metric_option == "日平均":
     metric_col = "avg_daily"
     metric_title = "各線平均日進站量"
@@ -207,7 +207,6 @@ else:
 
 st.write(metric_title)
 
-# 用 Altair 畫圖：線名在 X 軸，文字直立（labelAngle=-90）
 chart = (
     alt.Chart(df_line)
     .mark_bar()
@@ -217,7 +216,7 @@ chart = (
             sort=None,
             axis=alt.Axis(
                 title="線路",
-                labelAngle=-90,   # ← 這裡控制文字直的
+                labelAngle=-90,  # 線名直立
             ),
         ),
         y=alt.Y(
@@ -226,11 +225,6 @@ chart = (
         ),
         tooltip=["line", metric_col],
     )
-    .properties(height=400)
-)
-
-st.altair_chart(chart, use_container_width=True)
-
     .properties(height=400)
 )
 
