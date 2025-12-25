@@ -85,17 +85,8 @@ def map_line_color(line_name: str):
 
 df["color"] = df["line"].apply(map_line_color)
 
-# 2a. 顯示各線站數統計＋板南線檢查
-st.subheader("2️⃣ 各線站數統計（清洗 lat/lon 後）")
-st.write(df.groupby("line").size())
-
-bannan_df = df[df["line"].str.contains("板南", na=False)]
-st.subheader("2️⃣-1 板南線檢查")
-st.write("板南相關站數：", len(bannan_df))
-st.dataframe(bannan_df.head(20))
-
 # 3. 互動式選擇線路
-st.subheader("3️⃣ 選擇要顯示的線路")
+st.subheader("2️⃣ 選擇要顯示的線路")
 
 all_lines = sorted(df["line"].dropna().unique())
 selected_lines = st.multiselect(
@@ -111,7 +102,7 @@ if not selected_lines:
 df_view = df[df["line"].isin(selected_lines)]
 
 # 4. 視覺化設定
-st.subheader("4️⃣ 視覺化設定")
+st.subheader("3️⃣ 視覺化設定")
 
 metric_option = st.selectbox(
     "柱子高度使用的數字",
@@ -128,7 +119,7 @@ elevation_scale = st.slider(
 )
 
 # 5. 觀察視角設定
-st.subheader("5️⃣ 觀察視角設定")
+st.subheader("4️⃣ 觀察視角設定")
 
 center_lat = df_view["lat"].mean()
 center_lon = df_view["lon"].mean()
@@ -188,5 +179,5 @@ r = pdk.Deck(
     },
 )
 
-st.subheader("6️⃣ 全台捷運・輕軌 3D 車站人流地圖")
+st.subheader("5️⃣ 全台捷運・輕軌 3D 車站人流地圖")
 st.pydeck_chart(r)
